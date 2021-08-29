@@ -6,6 +6,7 @@ import PATH
 from sklearn.cluster import KMeans
 from scipy.ndimage import gaussian_filter
 import numpy as np
+import matplotlib
 import argparse
 import cv2
 import os
@@ -16,6 +17,7 @@ import os
 
 video_root = PATH.imgpath
 io_path = PATH.filepath
+matplotlib.use('qt5agg')
 
 """
 PART 1 DATA TRANSFORM
@@ -28,7 +30,8 @@ the dict will be transformed to numpy arrays
 obj_path = os.path.join(io_path, 'objects.pkl')
 
 raw = read_data(obj_path)
-centroid_dict, head_, tail_ = data_trans(raw)
+centroid_dict, h, t = data_trans(raw)
+centroid, h_, t_, _ = data_trans_v2(raw)
 framenum = len(centroid_dict[0])
 platenum = len(centroid_dict)
 raw_resolution = np.array([2048, 3072])
@@ -49,7 +52,7 @@ Map = read_data(map_path)
 
 # interface of target localization
 target_coordinate = []
-t_radius = 45  # the t_radius is the target radius, may changes with different videos
+t_radius = 45  # t_radius is the target radius, may changes with different videos
 
 
 def draw_circle(event, x, y, flags, param):
@@ -112,13 +115,28 @@ PARAMETER INFORMATION:
 MA = Motion_Analyser(raw, fps)
 rate, vector, turn_angle_diff = MA.trajectory_analyser()
 head_cast_angle = MA.headcast_detector()
-C = MA.angle_identifier(t_cod, t_radius)
 
 # CROP & MOVE
 st_traj, st_plate, st_target = crop_and_move_v2(centroid_dict, t_cod_dict, framenum, platenum)
 
+# binning trajectory coordinates and vectors
+centroid_binned = binning(centroid, 2, 1)
+vector_binned = binning(vector, 2, 1)
+st_traj_binned = binning(st_traj, 2, 1)
+C = MA.angle_identifier(t_cod, t_radius, centroid_binned, vector_binned)
+
+# vector coordinate, direction & quiver
+N = min(st_traj_binned.shape[1], vector_binned.shape[1])
+X = (st_traj_binned[:, :N, 0]).flatten()
+Y = (st_traj_binned[:, :N, 1]).flatten()
+U = (vector_binned[:, :N, 0]).flatten()
+V = (vector_binned[:, :N, 1]).flatten()
+C = C.flatten()
+
+vector_visualization(X, Y, U, V, C, st_target, t_radius, st_plate, scale=3)
+
 # SPARSEN the data
-resolution = 1200
+resolution = 2 * st_plate[0]
 sp_traj = sparsen(st_traj, resolution)
 sp_rate = sparsen(st_traj, resolution, rate)
 sp_turn_angle_diff = sparsen(st_traj, resolution, turn_angle_diff)
@@ -136,18 +154,13 @@ sp_rate_mean = reject_outliers(sp_rate_mean, 50)
 sp_turn_angle_diff_mean = reject_outliers(sp_turn_angle_diff_mean, 5)
 sp_head_cast_angle_mean = reject_outliers(sp_head_cast_angle_mean, 50)
 
-# filter gaussian
+# filter gaussian (a hack)
 sp_traj_cum = gaussian_filter(sp_traj_cum, 2)
 sp_rate_mean = gaussian_filter(sp_rate_mean, 3)
 sp_turn_angle_diff_mean = gaussian_filter(sp_turn_angle_diff_mean, 2)
 sp_head_cast_angle_mean = gaussian_filter(sp_head_cast_angle_mean, 7)
-heatmap_visualization_v2([sp_traj_cum, sp_rate_mean, sp_turn_angle_diff_mean, sp_head_cast_angle_mean],
-                         ['trajectory', 'instantaneous velocity', 'turn_angle_difference', 'head_cast_angle'])
 
-# vector coordinate, direction & quiver
-X = (st_traj[:, 1:-1, 0]).flatten()
-Y = (st_traj[:, 1:-1, 1]).flatten()
-U = (vector[:, :, 0]).flatten()
-V = (vector[:, :, 1]).flatten()
-C = C.flatten()
-vector_visualization(U, V, X, Y, C)
+heatmap_visualization_v2([sp_traj_cum, sp_rate_mean, sp_turn_angle_diff_mean, sp_head_cast_angle_mean],
+                         ['trajectory', 'instantaneous velocity', 'turn_angle_difference', 'head_cast_angle'],
+                         st_target, t_radius, st_plate)
+

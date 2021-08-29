@@ -75,6 +75,17 @@ def sparsen(idx, rsl, arr=None):
     return trans
 
 
+def binning(arr, window, axis):
+    arr = np.moveaxis(arr, axis, -1)
+    bins = np.arange(0, arr.shape[-1], window)
+    x = np.arange(0, arr.shape[-1])
+    digitized = np.digitize(x, bins)
+    binned = [arr[..., digitized == j].mean(axis=-1, keepdims=True) for j in range(1, len(bins))]
+    binned = np.concatenate(binned, axis=-1)
+    binned = np.moveaxis(binned, -1, axis)
+    return binned
+
+
 # move according to target position
 def crop_and_move_v2(traject_raw,
                      target_coordinate,
@@ -108,4 +119,3 @@ def sumup(previous_sumed_file_path, new_cum_data):
     pf = new_cum_data + pf
     joblib.dump(pf, 'currentdata.pkl')
     return
-

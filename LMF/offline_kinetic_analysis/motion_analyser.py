@@ -46,26 +46,36 @@ class Motion_Analyser:
         return velo_array, vector_array, np.abs(delta_turn_angle)
 
     # identify if toward target
-    def angle_identifier(self, target_coordinate, target_radius):
+    def angle_identifier(self, target_coordinate, target_radius, centroid=None, vector=None):
         targetnum = target_coordinate.shape[1]
-        quiver_id = np.zeros([self.platenum, self.framenum - 1, targetnum])
         r = target_radius
 
         # trajectory velocity vector
-        _, d_xy, _ = self.trajectory_analyser()
-        d_xx = np.expand_dims(d_xy[:, :, 0], axis=-1)
-        d_yy = np.expand_dims(d_xy[:, :, 1], axis=-1)
+        if vector is None:
+            _, d_xy, _ = self.trajectory_analyser()
+        else:
+            d_xy = vector
 
-        # reshape to make broadcastable
-        x = np.expand_dims(self.centroid[:, :, 0], -1)  # x (6, fn) -> (6, fn, 1)
-        y = np.expand_dims(self.centroid[:, :, 1], -1)
+        # centroid position
+        if centroid is None:
+            centroid = self.centroid
+        else:
+            centroid = centroid
+
+        N = min(d_xy.shape[1], centroid.shape[1])
+        d_xx = d_xy[:, :N, [0]]  # d_xx (6, fn, 1)
+        d_yy = d_xy[:, :N, [1]]
+        x = centroid[:, :N, [0]]  # x (6, fn, 1)
+        y = centroid[:, :N, [1]]
+        quiver_id = np.zeros([self.platenum, N, targetnum])
+
         xt = np.expand_dims(target_coordinate[:, :, 0], -2)  # target coordinate (6, 3, 2) -> (6, 1, 3)
         yt = np.expand_dims(target_coordinate[:, :, 1], -2)
 
         # compute angle between 2 tangents
         distl = ((xt - x) ** 2 + (yt - y) ** 2) ** 0.5  # centroid to target centre
         angle = np.arcsin(r / distl)
-        tan2tan = np.nan_to_num(2 * angle, nan=np.inf)[:, :-1, :]
+        tan2tan = np.nan_to_num(2 * angle, nan=np.inf)
 
         # rotation
         xu = (xt - x) / distl  # unit vector from centroid to target centre
@@ -83,10 +93,10 @@ class Motion_Analyser:
         yq2 = yq2 * distq + y
 
         # find the tangent vector
-        dxq1x = (xq1 - x)[:, :-1, :]
-        dyq1y = (yq1 - y)[:, :-1, :]
-        dxq2x = (xq2 - x)[:, :-1, :]
-        dyq2y = (yq2 - y)[:, :-1, :]
+        dxq1x = (xq1 - x)
+        dyq1y = (yq1 - y)
+        dxq2x = (xq2 - x)
+        dyq2y = (yq2 - y)
 
         # find the angle between one of the tangent line and the trajectory vector
         cos1 = (d_xx * dxq1x + d_yy * dyq1y) / ((d_xx ** 2 + d_yy ** 2) ** 0.5 * (dxq1x ** 2 + dyq1y ** 2) ** 0.5)
@@ -99,10 +109,10 @@ class Motion_Analyser:
 
         # one hot filter of minimum distance
         Dct = []
-        for d in range(self.centroid.shape[0]):
-            dct = cdist(self.centroid[d], target_coordinate[d])
+        for d in range(centroid.shape[0]):
+            dct = cdist(centroid[d], target_coordinate[d])
             Dct.append(np.expand_dims(dct, axis=0))
-        dct = np.concatenate(Dct, axis=0)[:, :-1, :]
+        dct = np.concatenate(Dct, axis=0)[:, :N, :]
         dctmin = np.expand_dims(dct.argmin(axis=-1), -1)
         onehotmin = np.zeros_like(dct)
         np.put_along_axis(onehotmin, dctmin, 1, axis=-1)
@@ -116,7 +126,8 @@ class Motion_Analyser:
         row = np.where(quiver_id == 1)[0]
         col = np.where(quiver_id == 1)[1]
         val = np.where(quiver_id == 1)[2] + 1
-        label = csr_matrix((val, (row, col)), shape=(self.platenum, self.framenum-1)).toarray()
+        label = csr_matrix((val, (row, col)), shape=(self.platenum, N), dtype=np.float32).toarray()
+        label[label == 0.] = np.nan
 
         return label
 
