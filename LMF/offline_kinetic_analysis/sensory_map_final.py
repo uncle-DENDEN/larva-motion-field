@@ -94,6 +94,7 @@ def vector_visualization(x, y, u, v, C, target_coord, r, plate_coord, scale=10, 
     pcrl(ax, plate_coord, 'slategrey')
     q = ax.quiver(x[::s], y[::s], u[::s], v[::s], C[::s],
                   angles='xy', scale_units='xy', scale=1/scale, cmap=cmap)
+    ax.scatter(x[::s], y[::s], marker='.', color='0.5', s=.1, alpha=0.4)
     pint(ax, target_coord, r, map_color=True, cmap=cmap)
     fig.colorbar(q, shrink=0.5)
     # remember to set the resolution shown in the figure
