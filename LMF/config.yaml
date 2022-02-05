@@ -1,0 +1,26 @@
+root_path: D:\workspace\python\objectTracking\sample
+out_path: D:\workspace\python\objectTracking\out_file
+video_name: 'batch'  # video name or video folder name
+
+# configuration of the BGS
+period_range: !!python/tuple   # estimated period of recurrent background movement
+- 457
+- 461
+periodic_thresh: 1  # threshold for detecting a pixel as a recurrent pixel
+kernel_size: !!python/tuple  # kernel used for morphological opening and closing
+- 6
+- 6
+beta: 1.0   # pruning accuracy tolerance, 0.0 < beta <= 1.0
+size_range: !!python/tuple  # size filter
+- 0
+- 1000
+
+# configuration  of the morphotracker
+length: 64  # length of larva in pixel, must be integer
+maxDisappeared: 270   # maxDisappeared frames of a subjects. If exceeds, then the object is deregistered
+warmup: 10  # start tracking after the warmup period
+
+# configuration of the analyzer
+matplotlib_backend: qt5agg
+framerate: 7
+target_radii: 45
